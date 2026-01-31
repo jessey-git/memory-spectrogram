@@ -1,32 +1,49 @@
+/* SPDX-FileCopyrightText: 2026 Jesse Yurkovich
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
-#include <QWidget>
+#include "DataSource.h"
+
 #include <QPixmap>
-#include <QScrollBar>
-#include "DataProcessor.h"
+#include <QWidget>
+
+struct BucketData {
+  int timeBucket;
+  int sizeBucket;
+  int allocationCount;
+};
 
 class WaterfallWidget : public QWidget {
   Q_OBJECT
 
-public:
-  explicit WaterfallWidget(QWidget* parent = nullptr);
+ public:
+  explicit WaterfallWidget(QWidget *parent = nullptr);
 
-  void setData(const std::vector<BucketData>& data);
+  void setData(const AllocationEvents &events);
+  void setLiveMode(bool enabled);
+  void setCurrentTime(double timeMs);
+  QSize sizeHint() const override;
 
-protected:
-  void paintEvent(QPaintEvent* event) override;
-  void resizeEvent(QResizeEvent* event) override;
+  void updateLiveData(AllocationEvents &&events);
 
-private:
-  void updateMyPixmap();
+ protected:
+  void paintEvent(QPaintEvent *event) override;
+  void resizeEvent(QResizeEvent *event) override;
+
+ private:
+  void updateVisualization();
   QColor getColorForCount(int count) const;
+  std::vector<BucketData> processDataForCurrentSize();
 
-  std::vector<BucketData> data_;
+  static int getSizeBucketIndex(size_t size);
+
+  AllocationEvents events_;
   QPixmap pixmap_;
-  QScrollBar* horizontalScrollBar_;
+  bool liveMode_;
+  double currentTimeMs_;
 
-  static constexpr int BUCKET_HEIGHT = 10;
-  static constexpr int BUCKET_WIDTH = 2;
+  static constexpr double MAX_TIME_WINDOW_MS = 30000.0;
 
   std::vector<QColor> viridisColors_;
 };

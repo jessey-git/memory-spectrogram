@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jesse Yurkovich
+#
+# SPDX-License-Identifier: GPL-2.0-or-later
 cmake_minimum_required(VERSION 3.20)
 project(MemoryWaterfall VERSION 1.0 LANGUAGES CXX)
 
@@ -18,8 +21,8 @@ add_executable(MemoryWaterfall
     src/DataSource.h
     src/CSVDataSource.cpp
     src/CSVDataSource.h
-    src/DataProcessor.cpp
-    src/DataProcessor.h
+    src/ETWDataSource.cpp
+    src/ETWDataSource.h
 )
 
 target_link_libraries(MemoryWaterfall 
@@ -31,5 +34,6 @@ target_link_libraries(MemoryWaterfall
 if(WIN32)
     set_target_properties(MemoryWaterfall PROPERTIES
         WIN32_EXECUTABLE TRUE
+        LINK_FLAGS "/MANIFESTUAC:\"level='requireAdministrator' uiAccess='false'\""
     )
 endif()

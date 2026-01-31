@@ -1,15 +1,13 @@
+/* SPDX-FileCopyrightText: 2026 Jesse Yurkovich
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
 #include <vector>
-#include <utility>
 
 struct AllocationEvent {
-    double timeMs;
-    size_t size;
+  double timeMs;
+  size_t size;
 };
 
-class DataSource {
-public:
-    virtual ~DataSource() = default;
-    virtual std::vector<AllocationEvent> loadData() = 0;
-};
+using AllocationEvents = std::vector<AllocationEvent>;
