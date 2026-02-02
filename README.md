@@ -5,12 +5,8 @@ A Qt-based C++ application that displays a horizontal spectrogram (waterfall gra
 ## Features
 
 - Visualizes memory allocation frequency vs. time as a waterfall graph
-- Reads allocation data from CSV files
-- Configurable time buckets (default: 5ms)
-- 32 predefined memory size buckets from 8 bytes to >49KB
-- Viridis color map for allocation count visualization (0-100)
-- Horizontal scrolling support for large datasets
-- Extensible data source architecture
+- Reads allocation data from a live ETW heap tracing session or from static CSV files
+- Viridis color map for allocation count visualization
 
 ## Requirements
 
@@ -59,44 +55,39 @@ The application expects CSV files with two columns (no header):
 
 Example:
 ```
-59.529600,2048
-60.921000,128
-61.345900,2024
+59.529600, 2048
+60.921000, 128
+61.345900, 300
+```
+
+## ETW Trace Session
+
+The application under inspection must first be set to allow heap tracing to occur:
+```powershell
+wpr.exe -HeapTracingConfig application_name.exe enable
+```
+
+After enabling heap tracing, you can start the MemoryWaterfall viewer and then the application.
+Note: The tracing session in the viewer must be active _before_ the application starts.
+
+When finished with analysis, you can disable heapt tracing:
+```powershell
+wpr.exe -HeapTracingConfig application_name.exe disable
 ```
 
 ## Architecture
 
 ### Data Flow
-1. **DataSource** - Abstract interface for loading allocation events
-2. **CSVDataSource** - Concrete implementation for CSV file reading
-3. **DataProcessor** - Processes raw events into time/size buckets
-4. **WaterfallWidget** - Qt widget that renders the visualization
-5. **MainWindow** - Main application window with menu and scrolling
-
-### Memory Size Buckets
-The application uses 32 predefined bucket sizes (in bytes):
-8, 16, 32, 48, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 640, 768, 896, 1024, 1792, 2688, 4032, 5376, 8192, 16448, 24640, 32832, 41024, 49216, >49216
+1. **CSVDataSource** - Implementation for CSV file reading
+2. **ETWDataSource** - Implementation for ETW session reading
+3. **WaterfallWidget** - Qt widget that renders the visualization
+4. **MainWindow** - Main application window with menu and scrolling
 
 ### Visualization Details
 - **Horizontal axis**: Time (left = oldest, right = newest)
 - **Vertical axis**: Memory size buckets (bottom = smallest, top = largest)
-- **Color**: Allocation count using Viridis color map (purple = 0, yellow = 100)
-- **Bucket height**: 10 pixels
-- **Time bucket width**: 2 pixels
-
-## Extending Data Sources
-
-To add a new data source, inherit from `DataSource` and implement the `loadData()` method:
-
-```cpp
-class MyDataSource : public DataSource {
-public:
-    std::vector<AllocationEvent> loadData() override {
-        // Your implementation here
-    }
-};
-```
+- **Color**: Allocation count using Viridis color map (purple = 0, yellow = 200+)
 
 ## License
 
-This project is open source and available under the MIT License.
+This project is open source and available under the GPL License v2.
