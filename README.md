@@ -70,34 +70,44 @@ The application under inspection must first be set to allow heap tracing to occu
 wpr.exe -HeapTracingConfig application_name.exe enable
 ```
 
-After enabling heap tracing, you can start the MemoryWaterfall viewer and then the application.
-Note: The tracing session in the viewer must be active _before_ the application starts.
-
-When finished with analysis, you can disable heapt tracing:
+When finished with analysis, you can disable heap tracing:
 ```powershell
 wpr.exe -HeapTracingConfig application_name.exe disable
 ```
 
+Typical steps:
+1. Enable heap tracing for the application
+2. Start the memory spectrogram viewer
+3. Start the tracing session (by default it's started automatically)
+4. Run the application
+
+Note: The tracing session in the viewer must be active _before_ the application starts.
+
 ## Architecture
 
-### Data Flow
-1. **CSVDataSource** - Implementation for CSV file reading
-2. **ETWDataSource** - Implementation for ETW session reading
+### Implementation
+1. **CSVDataSource** - CSV file reading
+2. **ETWDataSource** - ETW session control and event processing
 3. **WaterfallWidget** - Qt widget that renders the visualization
-4. **MainWindow** - Main application window with menu and scrolling
+4. **MainWindow** - Main application window
 
 ### Visualization Details
 - **Horizontal axis**: Time (left = oldest, right = newest)
 - **Vertical axis**: Memory size buckets (bottom = smallest, top = largest)
 - **Color**: Allocation count using Viridis color map (purple = 0, yellow = 200+)
 
+## TODOs
+- More stats (allocations/sec, bytes/sec, current time window size)
+- Graph labels and indicators (draw horiztonal line markers at certain bucket sizes)
+
 ## AI Disclosure
 Parts of this application were AI-assisted and then heavily modified.
 
 The AI-assisted parts include the following:
  - CMake project setup
- - ETW trace session creation and processing
  - QT application skeleton
+ - ETW trace session creation and processing
+ - Viridis color map algorithm
 
 ## License
 

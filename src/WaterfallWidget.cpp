@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Jesse Yurkovich
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "WaterfallWidget.h"
 
 #include <QPainter>
@@ -24,16 +27,12 @@ struct pair_equal {
   }
 };
 
-constexpr int NUM_COLORS = 128;
-constexpr std::array<size_t, 34> SIZE_BUCKETS = {
-    8,    16,   32,    48,    64,    80,    96,    112,   128,   160,    192,  224,
-    256,  320,  384,   448,   512,   640,   768,   896,   1024,  1792,   2688, 4032,
-    5376, 8192, 16448, 24640, 32832, 41024, 49216, 57408, 65600, INT_MAX};
+constexpr double MAX_TIME_WINDOW_MS = 30000.0;
 
-WaterfallWidget::WaterfallWidget(QWidget *parent)
-    : QWidget(parent), liveMode_(false), currentTimeMs_(0.0)
-{
-  viridisColors_.resize(NUM_COLORS + 1);
+// Viridis colormap
+constexpr int NUM_COLORS = 200;
+constexpr std::array<QColor, NUM_COLORS + 1> COLOR_MAP = []() {
+  std::array<QColor, NUM_COLORS + 1> map;
   for (int i = 0; i <= NUM_COLORS; ++i) {
     const double t = i / double(NUM_COLORS);
 
@@ -53,9 +52,18 @@ WaterfallWidget::WaterfallWidget(QWidget *parent)
       b = 0.550556 + t2 * (0.143936 - 0.550556);
     }
 
-    viridisColors_[i] = QColor(int(r * 255), int(g * 255), int(b * 255));
+    map[i] = QColor(int(r * 255), int(g * 255), int(b * 255));
   }
+  return map;
+}();
 
+constexpr std::array<size_t, 34> SIZE_BUCKETS = {
+    8,    16,   32,    48,    64,    80,    96,    112,   128,   160,    192,  224,
+    256,  320,  384,   448,   512,   640,   768,   896,   1024,  1792,   2688, 4032,
+    5376, 8192, 16448, 24640, 32832, 41024, 49216, 57408, 65600, INT_MAX};
+
+WaterfallWidget::WaterfallWidget(QWidget *parent) : QWidget(parent)
+{
   setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 }
 
@@ -75,23 +83,6 @@ void WaterfallWidget::setLiveMode(bool enabled)
   }
 }
 
-void WaterfallWidget::setCurrentTime(double timeMs)
-{
-  currentTimeMs_ = timeMs;
-  if (liveMode_) {
-    updateVisualization();
-  }
-}
-
-void WaterfallWidget::updateLiveData(AllocationEvents &&events)
-{
-  if (!liveMode_) {
-    return;
-  }
-
-  events_ = std::move(events);
-}
-
 QSize WaterfallWidget::sizeHint() const
 {
   return QSize(800, 600);
@@ -103,17 +94,13 @@ QColor WaterfallWidget::getColorForCount(int count) const
     count = 0;
   if (count > NUM_COLORS)
     count = NUM_COLORS;
-  return viridisColors_[count];
+  return COLOR_MAP[count];
 }
 
 int WaterfallWidget::getSizeBucketIndex(size_t size)
 {
-  for (size_t i = 0; i < SIZE_BUCKETS.size(); ++i) {
-    if (size <= SIZE_BUCKETS[i]) {
-      return int(i);
-    }
-  }
-  return int(SIZE_BUCKETS.size());
+  const auto index = std::lower_bound(SIZE_BUCKETS.begin(), SIZE_BUCKETS.end(), size);
+  return int(std::distance(SIZE_BUCKETS.begin(), index));
 }
 
 std::vector<BucketData> WaterfallWidget::processDataForCurrentSize()

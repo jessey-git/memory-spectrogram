@@ -10,7 +10,7 @@
 class CSVDataSource {
  public:
   explicit CSVDataSource(const QString &filePath);
-  AllocationEvents loadData();
+  AllocationEvents loadData() const;
 
  private:
   QString filePath_;

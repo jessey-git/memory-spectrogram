@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "MainWindow.h"
 #include "CSVDataSource.h"
+#include "DataSource.h"
+#include "ETWDataSource.h"
 
 #include <QAction>
 #include <QFileDialog>
@@ -118,8 +120,7 @@ void MainWindow::updateFromETW()
   }
 
   const double currentTime = etwDataSource_->getElapsedTimeMs();
-  AllocationEvents events = etwDataSource_->getRecentEvents(30000.0);
-
-  waterfallWidget_->updateLiveData(std::move(events));
-  waterfallWidget_->setCurrentTime(currentTime);
+  waterfallWidget_->updateLiveData(currentTime, [this](AllocationEvents &events) {
+    etwDataSource_->getRecentEvents(30000.0, events);
+  });
 }

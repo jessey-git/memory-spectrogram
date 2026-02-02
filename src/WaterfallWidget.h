@@ -8,6 +8,8 @@
 #include <QPixmap>
 #include <QWidget>
 
+#include <vector>
+
 struct BucketData {
   int timeBucket;
   int sizeBucket;
@@ -22,10 +24,17 @@ class WaterfallWidget : public QWidget {
 
   void setData(const AllocationEvents &events);
   void setLiveMode(bool enabled);
-  void setCurrentTime(double timeMs);
   QSize sizeHint() const override;
 
-  void updateLiveData(AllocationEvents &&events);
+  template<typename Fn> void updateLiveData(double timeMs, Fn &&fn)
+  {
+    currentTimeMs_ = timeMs;
+    if (!liveMode_) {
+      return;
+    }
+    fn(events_);
+    updateVisualization();
+  }
 
  protected:
   void paintEvent(QPaintEvent *event) override;
@@ -40,10 +49,6 @@ class WaterfallWidget : public QWidget {
 
   AllocationEvents events_;
   QPixmap pixmap_;
-  bool liveMode_;
-  double currentTimeMs_;
-
-  static constexpr double MAX_TIME_WINDOW_MS = 30000.0;
-
-  std::vector<QColor> viridisColors_;
+  double currentTimeMs_ = 0.0;
+  bool liveMode_ = false;
 };

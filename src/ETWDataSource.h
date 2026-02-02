@@ -28,22 +28,21 @@ class ETWDataSource : public QObject {
   {
     return running_;
   }
+
   double getElapsedTimeMs() const;
 
-  AllocationEvents getRecentEvents(double maxAgeMs);
+  void getRecentEvents(double maxAgeMs, AllocationEvents &recent) const;
 
  signals:
-  void newDataAvailable();
   void errorOccurred(const QString &error);
 
  private:
   void cleanupSession();
 
-  TRACEHANDLE sessionHandle_;
-  TRACEHANDLE consumerHandle_;
   std::thread processThread_;
-  QTimer *notifyTimer_;
-  bool running_;
+  TRACEHANDLE sessionHandle_ = 0;
+  TRACEHANDLE consumerHandle_ = 0;
+  bool running_ = false;
 
   static void WINAPI EventRecordCallback(PEVENT_RECORD pEvent);
   static DWORD WINAPI ProcessTraceThreadProc(LPVOID param);

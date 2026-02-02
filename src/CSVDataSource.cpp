@@ -5,11 +5,10 @@
 
 #include <QDebug>
 #include <QFile>
-#include <QTextStream>
 
 CSVDataSource::CSVDataSource(const QString &filePath) : filePath_(filePath) {}
 
-AllocationEvents CSVDataSource::loadData()
+AllocationEvents CSVDataSource::loadData() const
 {
   AllocationEvents events;
 

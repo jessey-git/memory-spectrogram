@@ -19,59 +19,31 @@ double ETWDataSource::firstTimestampMs_ = 0.0;
 bool ETWDataSource::haveFirstTimestamp_ = false;
 bool ETWDataSource::shouldStop_ = false;
 
-static bool TryGetUInt64Property(PEVENT_RECORD pEvent,
-                                 PTRACE_EVENT_INFO pInfo,
-                                 const wchar_t *propertyName,
-                                 ULONGLONG &outValue)
+static ULONGLONG GetAllocSize(PEVENT_RECORD pEvent, PTRACE_EVENT_INFO pInfo)
 {
-  for (DWORD i = 0; i < pInfo->TopLevelPropertyCount; i++) {
-    const wchar_t *propName = (const wchar_t *)((PBYTE)pInfo +
-                                                pInfo->EventPropertyInfoArray[i].NameOffset);
-    if (wcscmp(propName, propertyName) != 0) {
-      continue;
-    }
+  // Note: We are assuming that the payload is at index 1 to avoid the cost of
+  // searching through the properties by name.
+  const wchar_t *propName = (const wchar_t *)((PBYTE)pInfo +
+                                              pInfo->EventPropertyInfoArray[1].NameOffset);
+  PROPERTY_DATA_DESCRIPTOR descriptor{};
+  descriptor.PropertyName = ULONGLONG(propName);
+  descriptor.ArrayIndex = ULONG_MAX;
 
-    PROPERTY_DATA_DESCRIPTOR descriptor{};
-    descriptor.PropertyName = ULONGLONG(propName);
-    descriptor.ArrayIndex = ULONG_MAX;
-
-    ULONG size = 0;
-    ULONG status = TdhGetPropertySize(pEvent, 0, nullptr, 1, &descriptor, &size);
-    if (status != ERROR_SUCCESS || size == 0 || size > 8) {
-      return false;
-    }
-
-    BYTE buf[8];
-    status = TdhGetProperty(pEvent, 0, nullptr, 1, &descriptor, size, buf);
-    if (status != ERROR_SUCCESS) {
-      return false;
-    }
-
-    if (size == sizeof(ULONG)) {
-      outValue = *(ULONG *)buf;
-      return true;
-    }
-    if (size == sizeof(ULONGLONG)) {
-      outValue = *(ULONGLONG *)buf;
-      return true;
-    }
-    if (size == sizeof(ULONG_PTR)) {
-      outValue = *(ULONG_PTR *)buf;
-      return true;
-    }
-
-    return false;
+  // Note: We expect this payload to be 8 bytes. We are taking a shortcut here
+  // to avoid as much overhead as possible.
+  BYTE buf[8];
+  ULONG status = TdhGetProperty(pEvent, 0, nullptr, 1, &descriptor, 8, buf);
+  if (status != ERROR_SUCCESS) {
+    // Return a fixed positive value that will at least show something in the
+    // visualizer (hopefully triggering further investigation).
+    return 1;
   }
 
-  return false;
+  return *(ULONGLONG *)buf;
 }
 
-ETWDataSource::ETWDataSource(QObject *parent)
-    : QObject(parent), sessionHandle_(0), consumerHandle_(0), running_(false)
+ETWDataSource::ETWDataSource(QObject *parent) : QObject(parent)
 {
-  notifyTimer_ = new QTimer(this);
-  connect(notifyTimer_, &QTimer::timeout, this, &ETWDataSource::newDataAvailable);
-
   QueryPerformanceFrequency(&frequency_);
 }
 
@@ -91,37 +63,42 @@ void WINAPI ETWDataSource::EventRecordCallback(PEVENT_RECORD pEvent)
     return;
   }
 
-  DWORD bufferSize = 0;
-  DWORD status = TdhGetEventInformation(pEvent, 0, nullptr, nullptr, &bufferSize);
+  // Note: Emperically the size of the structure is 352 bytes. We don't want to
+  // pay the cost of allocation on every event, so we use a stack buffer first.
+  BYTE pInfoBuffer[384];
+  DWORD bufferSize = sizeof(pInfoBuffer);
+
+  PTRACE_EVENT_INFO pInfo = (PTRACE_EVENT_INFO)pInfoBuffer;
+  DWORD status = TdhGetEventInformation(pEvent, 0, nullptr, pInfo, &bufferSize);
 
   if (status == ERROR_INSUFFICIENT_BUFFER) {
-    PTRACE_EVENT_INFO pInfo = (PTRACE_EVENT_INFO)malloc(bufferSize);
+    pInfo = (PTRACE_EVENT_INFO)malloc(bufferSize);
     if (pInfo == nullptr) {
       return;
     }
-
     status = TdhGetEventInformation(pEvent, 0, nullptr, pInfo, &bufferSize);
-    if (status == ERROR_SUCCESS) {
-      ULONGLONG allocSizeU64 = 0;
-      if (TryGetUInt64Property(pEvent, pInfo, L"AllocSize", allocSizeU64)) {
-        const double absoluteTimestampMs = pEvent->EventHeader.TimeStamp.QuadPart / 10000.0;
+  }
 
-        QMutexLocker locker(&dataMutex_);
+  if (status == ERROR_SUCCESS) {
+    const double absoluteTimestampMs = pEvent->EventHeader.TimeStamp.QuadPart / 10000.0;
+    const ULONGLONG allocSizeU64 = GetAllocSize(pEvent, pInfo);
 
-        if (!haveFirstTimestamp_) {
-          QueryPerformanceCounter(&startTime_);
-          firstTimestampMs_ = absoluteTimestampMs;
-          haveFirstTimestamp_ = true;
-        }
+    QMutexLocker locker(&dataMutex_);
 
-        const double timestampMs = (absoluteTimestampMs >= firstTimestampMs_) ?
-                                       (absoluteTimestampMs - firstTimestampMs_) :
-                                       0.0;
-
-        events_.push_back(AllocationEvent{timestampMs, allocSizeU64});
-      }
+    if (!haveFirstTimestamp_) {
+      QueryPerformanceCounter(&startTime_);
+      firstTimestampMs_ = absoluteTimestampMs;
+      haveFirstTimestamp_ = true;
     }
 
+    const double timestampMs = (absoluteTimestampMs >= firstTimestampMs_) ?
+                                   (absoluteTimestampMs - firstTimestampMs_) :
+                                   0.0;
+
+    events_.push_back(AllocationEvent{timestampMs, allocSizeU64});
+  }
+
+  if (pInfo != (PTRACE_EVENT_INFO)pInfoBuffer) {
     free(pInfo);
   }
 }
@@ -217,7 +194,6 @@ bool ETWDataSource::start()
   processThread_ = std::thread(ProcessTraceThreadProc, &consumerHandle_);
 
   running_ = true;
-  notifyTimer_->start(50);
 
   qDebug() << "ETW tracing started successfully";
   return true;
@@ -229,7 +205,6 @@ void ETWDataSource::stop()
     return;
   }
 
-  notifyTimer_->stop();
   shouldStop_ = true;
 
   if (consumerHandle_) {
@@ -268,22 +243,21 @@ void ETWDataSource::cleanupSession()
   }
 }
 
-AllocationEvents ETWDataSource::getRecentEvents(double maxAgeMs)
+void ETWDataSource::getRecentEvents(double maxAgeMs, AllocationEvents &recent) const
 {
   QMutexLocker locker(&dataMutex_);
 
+  recent.clear();
+
   if (events_.empty()) {
-    return {};
+    return;
   }
 
   const double latestTime = events_.back().timeMs;
   const double cutoffTime = latestTime - maxAgeMs;
 
-  // Remove old events when at least half of the events are before the cutoff
-  const int idealHalfSize = 512 * 1024;
-
-  AllocationEvents recent;
-  recent.reserve(idealHalfSize);
+  // Trigger cleanup once there's a meaningful buildup of old events
+  const int cutoffSize = 512 * 1024;
 
   bool cutoffIndexSet = false;
   size_t cutoffIndex = 0;
@@ -291,7 +265,7 @@ AllocationEvents ETWDataSource::getRecentEvents(double maxAgeMs)
     const AllocationEvent &event = events_[i];
     if (event.timeMs >= cutoffTime) {
       recent.push_back(event);
-      if (recent.size() == 1 && i > idealHalfSize) {
+      if (recent.size() == 1 && i > cutoffSize) {
         cutoffIndex = i - 1;
         cutoffIndexSet = true;
       }
@@ -301,8 +275,6 @@ AllocationEvents ETWDataSource::getRecentEvents(double maxAgeMs)
   if (cutoffIndexSet) {
     events_.erase(events_.begin(), events_.begin() + cutoffIndex + 1);
   }
-
-  return recent;
 }
 
 double ETWDataSource::getElapsedTimeMs() const
