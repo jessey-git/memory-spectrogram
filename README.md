@@ -2,6 +2,8 @@
 
 A Qt-based C++ application that displays a horizontal spectrogram (waterfall graph) visualization of memory allocation patterns over time.
 
+![screenshot](screenshots/memory-spectrogram-ex00.png)
+
 ## Features
 
 - Visualizes memory allocation frequency vs. time as a waterfall graph
@@ -57,7 +59,8 @@ Example:
 ```
 59.529600, 2048
 60.921000, 128
-61.345900, 300
+61.345900, 320
+61.348100, 640
 ```
 
 ## ETW Trace Session
@@ -87,6 +90,14 @@ wpr.exe -HeapTracingConfig application_name.exe disable
 - **Horizontal axis**: Time (left = oldest, right = newest)
 - **Vertical axis**: Memory size buckets (bottom = smallest, top = largest)
 - **Color**: Allocation count using Viridis color map (purple = 0, yellow = 200+)
+
+## AI Disclosure
+Parts of this application were AI-assisted and then heavily modified.
+
+The AI-assisted parts include the following:
+ - CMake project setup
+ - ETW trace session creation and processing
+ - QT application skeleton
 
 ## License
 
