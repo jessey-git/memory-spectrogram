@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <numeric>
 #include <vector>
 
 struct pair_hash {
@@ -61,6 +62,12 @@ constexpr std::array<size_t, 36> SIZE_BUCKETS = {
     256,   320,   384,   448,   512,   640,   768,   896,    1024,   2048,   4096,    8192,
     16384, 24576, 32768, 49152, 65536, 81920, 98304, 114688, 131072, 524288, 2097152, ULLONG_MAX};
 
+constexpr int GetSizeBucketIndex(size_t size)
+{
+  const auto index = std::lower_bound(SIZE_BUCKETS.begin(), SIZE_BUCKETS.end(), size);
+  return int(std::distance(SIZE_BUCKETS.begin(), index));
+}
+
 WaterfallWidget::WaterfallWidget(QWidget *parent) : QWidget(parent)
 {
   setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -94,12 +101,6 @@ QColor WaterfallWidget::getColorForCount(int count) const
   if (count > NUM_COLORS)
     count = NUM_COLORS;
   return COLOR_MAP[count];
-}
-
-int WaterfallWidget::getSizeBucketIndex(size_t size)
-{
-  const auto index = std::lower_bound(SIZE_BUCKETS.begin(), SIZE_BUCKETS.end(), size);
-  return int(std::distance(SIZE_BUCKETS.begin(), index));
 }
 
 void WaterfallWidget::processDataForCurrentSize()
@@ -155,10 +156,25 @@ void WaterfallWidget::processDataForCurrentSize()
     if (timeBucket >= width()) {
       timeBucket = width() - 1;
     }
-    const int sizeBucket = WaterfallWidget::getSizeBucketIndex(event.size);
+    const int sizeBucket = GetSizeBucketIndex(event.size);
 
     data_.incrementCount(timeBucket, sizeBucket);
   }
+
+  // Allocation statistics
+  auto maxEvent = std::max_element(
+      events_.begin(), events_.end(), [](const AllocationEvent &a, const AllocationEvent &b) {
+        return a.size < b.size;
+      });
+  auto maxCount = std::max_element(data_.rawCounts_.begin(), data_.rawCounts_.end());
+  stats_.timeBucketMs = timeBucketMs;
+  stats_.totalAllocations = events_.size();
+  stats_.totalSize = std::accumulate(
+      events_.begin(), events_.end(), size_t(0), [](size_t sum, const AllocationEvent &e) {
+        return sum + e.size;
+      });
+  stats_.maxSize = maxEvent != events_.end() ? maxEvent->size : 0;
+  stats_.maxTimeBucketAllocationCount = maxCount != data_.rawCounts_.end() ? *maxCount : 0;
 }
 
 void WaterfallWidget::updateVisualization()
@@ -167,7 +183,8 @@ void WaterfallWidget::updateVisualization()
     return;
   }
 
-  const int pixmapHeight = height();
+  constexpr int statsHeight = 25;
+  const int pixmapHeight = height() - statsHeight;
   const int bucketHeight = std::max(1, pixmapHeight / int(SIZE_BUCKETS.size()));
 
   pixmap_.fill(Qt::black);
@@ -188,8 +205,39 @@ void WaterfallWidget::paintEvent(QPaintEvent *event)
 {
   QPainter painter(this);
 
+  const int graphHeight = height() - StatsHeight;
+
   if (!pixmap_.isNull()) {
+    // Draw spectrogram graph
     painter.drawPixmap(0, 0, pixmap_);
+
+    // Draw statistics area
+    painter.setPen(Qt::white);
+    QFont font = painter.font();
+    font.setPixelSize(11);
+    painter.setFont(font);
+
+    auto useThinSpace = [](size_t val) {
+      QString str = QString::number(val);
+      qsizetype insertPosition = str.length() - 3;
+      while (insertPosition > 0) {
+        str.insert(insertPosition, QChar(0x2009));  // Thin space
+        insertPosition -= 3;
+      }
+      return str;
+    };
+
+    const QString statsText =
+        QString(
+            "Total Allocations: %1  |  Total Size: %2 bytes  |  Max Allocation: %3 bytes  |  Max "
+            "Bucket Count: %4  |  Time Bucket: %5 ms")
+            .arg(useThinSpace(stats_.totalAllocations))
+            .arg(useThinSpace(stats_.totalSize))
+            .arg(useThinSpace(stats_.maxSize))
+            .arg(useThinSpace(stats_.maxTimeBucketAllocationCount))
+            .arg(stats_.timeBucketMs, 0, 'f', 2);
+
+    painter.drawText(6, graphHeight + 17, statsText);
   }
   else {
     painter.fillRect(rect(), Qt::black);
@@ -202,6 +250,6 @@ void WaterfallWidget::resizeEvent(QResizeEvent *event)
 {
   QWidget::resizeEvent(event);
 
-  pixmap_ = QPixmap(width(), height());
+  pixmap_ = QPixmap(width(), height() - StatsHeight);
   updateVisualization();
 }

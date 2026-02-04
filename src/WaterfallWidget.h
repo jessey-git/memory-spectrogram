@@ -8,6 +8,7 @@
 #include <QPixmap>
 #include <QWidget>
 
+#include <algorithm>
 #include <vector>
 
 struct AllocationData {
@@ -16,7 +17,7 @@ struct AllocationData {
     numTimeBuckets_ = numTimeBuckets;
     numSizeBuckets_ = numSizeBuckets;
     rawCounts_.resize(size_t(numTimeBuckets) * numSizeBuckets, 0);
-    rawCounts_.clear();
+    std::fill(rawCounts_.begin(), rawCounts_.end(), 0);
   }
 
   void incrementCount(int timeBucket, int sizeBucket)
@@ -70,10 +71,11 @@ class WaterfallWidget : public QWidget {
   QColor getColorForCount(int count) const;
   void processDataForCurrentSize();
 
-  static int getSizeBucketIndex(size_t size);
+  const int StatsHeight = 25;
 
   AllocationEvents events_;
   AllocationData data_;
+  AllocationStats stats_;
   QPixmap pixmap_;
   double currentTimeMs_ = 0.0;
   bool liveMode_ = false;
