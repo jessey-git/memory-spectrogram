@@ -7,7 +7,6 @@
 
 #include <algorithm>
 #include <array>
-#include <unordered_map>
 #include <vector>
 
 struct pair_hash {
@@ -103,14 +102,14 @@ int WaterfallWidget::getSizeBucketIndex(size_t size)
   return int(std::distance(SIZE_BUCKETS.begin(), index));
 }
 
-std::vector<BucketData> WaterfallWidget::processDataForCurrentSize()
+void WaterfallWidget::processDataForCurrentSize()
 {
   if (width() <= 0) {
-    return {};
+    return;
   }
 
   if (events_.empty() && !liveMode_) {
-    return {};
+    return;
   }
 
   double displayTimeRange = MAX_TIME_WINDOW_MS;
@@ -126,7 +125,7 @@ std::vector<BucketData> WaterfallWidget::processDataForCurrentSize()
   }
   else {
     if (events_.empty()) {
-      return {};
+      return;
     }
 
     double minTime = events_[0].timeMs;
@@ -143,13 +142,9 @@ std::vector<BucketData> WaterfallWidget::processDataForCurrentSize()
     endTime = startTime + displayTimeRange;
   }
 
-  double timeBucketMs = displayTimeRange / width();
-  if (timeBucketMs < 0.1) {
-    timeBucketMs = 0.1;
-  }
+  const double timeBucketMs = displayTimeRange / width();
 
-  static std::unordered_map<std::pair<int, int>, int, pair_hash, pair_equal> bucketMap;
-  bucketMap.clear();
+  data_.prepare(width(), SIZE_BUCKETS.size());
 
   for (const AllocationEvent &event : events_) {
     if (event.timeMs < startTime || event.timeMs > endTime) {
@@ -162,17 +157,8 @@ std::vector<BucketData> WaterfallWidget::processDataForCurrentSize()
     }
     const int sizeBucket = WaterfallWidget::getSizeBucketIndex(event.size);
 
-    auto key = std::make_pair(timeBucket, sizeBucket);
-    bucketMap[key]++;
+    data_.incrementCount(timeBucket, sizeBucket);
   }
-
-  std::vector<BucketData> result;
-  result.reserve(bucketMap.size());
-  for (const auto &[key, count] : bucketMap) {
-    result.push_back({key.first, key.second, count});
-  }
-
-  return result;
 }
 
 void WaterfallWidget::updateVisualization()
@@ -181,26 +167,19 @@ void WaterfallWidget::updateVisualization()
     return;
   }
 
-  const int pixmapWidth = width();
   const int pixmapHeight = height();
   const int bucketHeight = std::max(1, pixmapHeight / int(SIZE_BUCKETS.size()));
 
-  pixmap_ = QPixmap(pixmapWidth, pixmapHeight);
   pixmap_.fill(Qt::black);
 
+  processDataForCurrentSize();
+
   QPainter painter(&pixmap_);
-
-  const std::vector<BucketData> bucketData = processDataForCurrentSize();
-  for (const BucketData &bucket : bucketData) {
-    if (bucket.timeBucket >= pixmapWidth || bucket.sizeBucket > SIZE_BUCKETS.size()) {
-      continue;
-    }
-
-    const int x = bucket.timeBucket;
-    const int y = pixmapHeight - (bucket.sizeBucket + 1) * bucketHeight;
-    const QColor color = getColorForCount(bucket.allocationCount);
+  data_.process([&](int x, int y, int count) {
+    y = pixmapHeight - (y + 1) * bucketHeight;
+    const QColor color = getColorForCount(count);
     painter.fillRect(x, y, 1, bucketHeight, color);
-  }
+  });
 
   update();
 }
@@ -222,5 +201,7 @@ void WaterfallWidget::paintEvent(QPaintEvent *event)
 void WaterfallWidget::resizeEvent(QResizeEvent *event)
 {
   QWidget::resizeEvent(event);
+
+  pixmap_ = QPixmap(width(), height());
   updateVisualization();
 }

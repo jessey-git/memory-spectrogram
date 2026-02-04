@@ -10,10 +10,35 @@
 
 #include <vector>
 
-struct BucketData {
-  int timeBucket;
-  int sizeBucket;
-  int allocationCount;
+struct AllocationData {
+  void prepare(int numTimeBuckets, int numSizeBuckets)
+  {
+    numTimeBuckets_ = numTimeBuckets;
+    numSizeBuckets_ = numSizeBuckets;
+    rawCounts_.resize(size_t(numTimeBuckets) * numSizeBuckets, 0);
+    rawCounts_.clear();
+  }
+
+  void incrementCount(int timeBucket, int sizeBucket)
+  {
+    rawCounts_[size_t(timeBucket) * numSizeBuckets_ + sizeBucket]++;
+  }
+
+  template<typename Fn> void process(Fn &&fn) const
+  {
+    for (int t = 0; t < numTimeBuckets_; ++t) {
+      for (int s = 0; s < numSizeBuckets_; ++s) {
+        const int count = rawCounts_[size_t(t) * numSizeBuckets_ + s];
+        if (count > 0) {
+          fn(t, s, count);
+        }
+      }
+    }
+  }
+
+  int numTimeBuckets_ = 0;
+  int numSizeBuckets_ = 0;
+  std::vector<int> rawCounts_;
 };
 
 class WaterfallWidget : public QWidget {
@@ -43,11 +68,12 @@ class WaterfallWidget : public QWidget {
  private:
   void updateVisualization();
   QColor getColorForCount(int count) const;
-  std::vector<BucketData> processDataForCurrentSize();
+  void processDataForCurrentSize();
 
   static int getSizeBucketIndex(size_t size);
 
   AllocationEvents events_;
+  AllocationData data_;
   QPixmap pixmap_;
   double currentTimeMs_ = 0.0;
   bool liveMode_ = false;
