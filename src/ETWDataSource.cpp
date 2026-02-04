@@ -253,7 +253,7 @@ void ETWDataSource::getRecentEvents(double maxAgeMs, AllocationEvents &recent) c
     return;
   }
 
-  const double latestTime = events_.back().timeMs;
+  const double latestTime = getElapsedTimeMs();
   const double cutoffTime = latestTime - maxAgeMs;
 
   // Trigger cleanup once there's a meaningful buildup of old events
@@ -279,12 +279,6 @@ void ETWDataSource::getRecentEvents(double maxAgeMs, AllocationEvents &recent) c
 
 double ETWDataSource::getElapsedTimeMs() const
 {
-  QMutexLocker locker(&dataMutex_);
-
-  if (!running_ || !haveFirstTimestamp_) {
-    return 0.0;
-  }
-
   LARGE_INTEGER currentTime;
   QueryPerformanceCounter(&currentTime);
 

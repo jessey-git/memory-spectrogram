@@ -94,7 +94,7 @@ Note: The tracing session in the viewer must be active _before_ the application 
 ### Visualization Details
 - **Horizontal axis**: Time (left = oldest, right = newest)
 - **Vertical axis**: Memory size buckets (bottom = smallest, top = largest)
-- **Color**: Allocation count using Viridis color map (purple = 0, yellow = 200+)
+- **Color**: Allocation count using Viridis color map (purple = 0, yellow = 400+)
 
 ## TODOs
 - More stats (allocations/sec, bytes/sec, current time window size)

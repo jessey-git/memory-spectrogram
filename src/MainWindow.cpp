@@ -92,7 +92,7 @@ void MainWindow::startLiveCapture()
   if (etwDataSource_->start()) {
     isLiveCapture_ = true;
     waterfallWidget_->setLiveMode(true);
-    updateTimer_->start(50);
+    updateTimer_->start(30);
     statusBar()->showMessage("Live ETW capture active");
   }
   else {

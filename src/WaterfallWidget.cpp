@@ -30,7 +30,7 @@ struct pair_equal {
 constexpr double MAX_TIME_WINDOW_MS = 30000.0;
 
 // Viridis colormap
-constexpr int NUM_COLORS = 200;
+constexpr int NUM_COLORS = 400;
 constexpr std::array<QColor, NUM_COLORS + 1> COLOR_MAP = []() {
   std::array<QColor, NUM_COLORS + 1> map;
   for (int i = 0; i <= NUM_COLORS; ++i) {
@@ -57,10 +57,10 @@ constexpr std::array<QColor, NUM_COLORS + 1> COLOR_MAP = []() {
   return map;
 }();
 
-constexpr std::array<size_t, 34> SIZE_BUCKETS = {
-    8,    16,   32,    48,    64,    80,    96,    112,   128,   160,    192,  224,
-    256,  320,  384,   448,   512,   640,   768,   896,   1024,  1792,   2688, 4032,
-    5376, 8192, 16448, 24640, 32832, 41024, 49216, 57408, 65600, INT_MAX};
+constexpr std::array<size_t, 36> SIZE_BUCKETS = {
+    8,     16,    32,    48,    64,    80,    96,    112,    128,    160,    192,     224,
+    256,   320,   384,   448,   512,   640,   768,   896,    1024,   2048,   4096,    8192,
+    16384, 24576, 32768, 49152, 65536, 81920, 98304, 114688, 131072, 524288, 2097152, ULLONG_MAX};
 
 WaterfallWidget::WaterfallWidget(QWidget *parent) : QWidget(parent)
 {
@@ -148,8 +148,8 @@ std::vector<BucketData> WaterfallWidget::processDataForCurrentSize()
     timeBucketMs = 0.1;
   }
 
-  std::unordered_map<std::pair<int, int>, int, pair_hash, pair_equal> bucketMap;
-  bucketMap.reserve(16000);
+  static std::unordered_map<std::pair<int, int>, int, pair_hash, pair_equal> bucketMap;
+  bucketMap.clear();
 
   for (const AllocationEvent &event : events_) {
     if (event.timeMs < startTime || event.timeMs > endTime) {
